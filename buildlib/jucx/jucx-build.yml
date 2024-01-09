@@ -43,7 +43,7 @@ jobs:
           MAVEN_VERSION=${TAG:1}
           make -C bindings/java/src/main/native/ package JUCX_VERSION=${MAVEN_VERSION}
         displayName: Build JUCX
-        condition: eq(variables['Build.Reason'], 'PullRequest')
+        condition: eq(variables['Build.Reason'], 'IndividualCI')
 
       - bash: |
           set -eE
