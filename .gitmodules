@@ -4,4 +4,4 @@
 	branch = master
 [submodule "src/uct/utofu"]
 	path = src/uct/utofu
-	url = https://github.com/ytn86/ucx-utofu
+	url = ../ucx-utofu
