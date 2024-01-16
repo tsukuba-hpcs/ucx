@@ -71,6 +71,10 @@
 #endif
 
 
+//#ifdef HAVE_TLTOFU
+#  include <uct/utofu/utofu_def.h>
+//#endif
+
 static void print_size(const char *name, size_t size)
 {
     int i;
@@ -256,6 +260,21 @@ void print_type_info(const char * tl_name)
         printf("\n");
     }
 #endif
+
+
+
+//#if HAVE_UTOFU
+	if (tl_name == NULL || !strcasecmp(tl_name, "utofu")) {
+		printf("UTOFU:\n");
+		PRINT_SIZE(uct_utofu_md_t);
+		PRINT_SIZE(uct_utofu_iface_t);
+		PRINT_SIZE(uct_utofu_iface_config_t);
+
+        printf("\n");
+	}
+
+//#endif
+
 
     printf("\nUCP:\n");
     PRINT_SIZE(ucp_context_t);
