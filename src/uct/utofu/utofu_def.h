@@ -4,6 +4,7 @@
 #include <uct/api/uct.h>
 #include <uct/base/uct_iface.h>
 #include <uct/base/uct_md.h>
+#include <ucs/sys/string.h>
 
 #include <utofu.h>
 
@@ -25,6 +26,10 @@ extern uct_component_t uct_utofu_component;
 typedef struct uct_utofu_md_config {
     uct_md_config_t super;
 } uct_utofu_md_config_t;
+
+typedef struct uct_utofu_md {
+    uct_md_t super;
+} uct_utofu_md_t;
 
 ucs_status_t uct_utofu_query_devices(uct_md_h md,
 									 uct_tl_device_resource_t **tl_devices_p,
