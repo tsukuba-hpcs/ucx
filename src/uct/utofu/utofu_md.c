@@ -49,7 +49,7 @@ uct_md_ops_t md_ops = {
     .detect_memory_type = NULL,
 };
 
-static int md_num;
+static __thread int md_num = 0;
 
 ucs_status_t uct_utofu_md_open(uct_component_h component,
 							   const char *md_name,
@@ -60,15 +60,17 @@ ucs_status_t uct_utofu_md_open(uct_component_h component,
     ucs_status_t status = UCS_OK;
     utofu_tni_id_t *tni_ids;
     size_t num_tnis;
+    uint32_t cpu_id, numa_id;
     rc = utofu_get_onesided_tnis(&tni_ids, &num_tnis);
     if (rc != UTOFU_SUCCESS) {
 		ucs_error("error on utofu_get_onesided_tnis rc=%d", rc);
 		return UCS_ERR_UNSUPPORTED;
     }
+    syscall(SYS_getcpu, &cpu_id, &numa_id, NULL, NULL);
     md = ucs_malloc(sizeof(*md), "uct_utofu_md_t");
     md->super.ops = &md_ops;
     md->super.component = &uct_utofu_component;
-    md->tni_id = tni_ids[(md_num++) % num_tnis];
+    md->tni_id = tni_ids[(cpu_id + (md_num++)) % num_tnis];
     free(tni_ids);
     rc = utofu_create_vcq(md->tni_id, 0, &md->vcq_hdl);
     if (rc != UTOFU_SUCCESS) {
