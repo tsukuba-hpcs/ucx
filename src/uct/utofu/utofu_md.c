@@ -26,8 +26,20 @@ ucs_status_t uct_utofu_md_query(uct_md_h tl_md,
     return (UCS_OK);
 }
 
+void uct_utofu_md_close(uct_md_h tl_md) {
+    uct_utofu_md_t *md;
+    int rc;
+    ucs_debug("uct_utofu_md_close");
+    md = ucs_derived_of(tl_md, uct_utofu_md_t); 
+    rc = utofu_free_vcq(md->vcq_hdl);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("error on utofu_free_vcq rc=%d", rc);
+    }
+    free(md);
+}
+
 uct_md_ops_t md_ops = {
-    .close = ucs_empty_function,
+    .close = uct_utofu_md_close,
     .query = uct_utofu_md_query,
     .mem_alloc = NULL,
     .mem_free = NULL,
