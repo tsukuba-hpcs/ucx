@@ -52,6 +52,9 @@ static UCS_CLASS_INIT_FUNC(uct_utofu_iface_t,
 						   uct_worker_h worker,
 						   const uct_iface_params_t *params,
 						   const uct_iface_config_t *tl_config) {
+    uct_utofu_md_t *md;
+    ucs_debug("UCS_CLASS_INIT_FUNC(uct_utofu_iface_t)\n");
+    md = ucs_derived_of(tl_md, uct_utofu_md_t);
     UCS_CLASS_CALL_SUPER_INIT(uct_base_iface_t,
         &uct_utofu_iface_ops,
         &uct_utofu_iface_internal_ops,
@@ -61,6 +64,7 @@ static UCS_CLASS_INIT_FUNC(uct_utofu_iface_t,
         tl_config
         UCS_STATS_ARG(params->stats_root)
         UCS_STATS_ARG(UCT_UTOFU_MD_NAME));
+    self->md = md;
     return UCS_ERR_NOT_IMPLEMENTED;
 }
 
@@ -76,6 +80,21 @@ UCS_CLASS_DEFINE_DELETE_FUNC(uct_utofu_iface_t, uct_iface_t);
 UCS_CLASS_DEFINE_NEW_FUNC(uct_utofu_iface_t, uct_iface_t, uct_md_h,
 						  uct_worker_h, const uct_iface_params_t*,
 						  const uct_iface_config_t*);
+
+ucs_status_t uct_utofu_query_devices(uct_md_h tl_md,
+									 uct_tl_device_resource_t **tl_devices_p,
+									 unsigned *num_tl_devices_p) {
+	uct_tl_device_resource_t *devices;
+    ucs_debug("uct_utofu_query_devices\n");
+	devices = ucs_malloc(sizeof(*devices), "uct_tl_device_resource_t");
+	ucs_snprintf_zero(devices->name, 14, "Tofu-D");
+	devices->type = UCT_DEVICE_TYPE_NET;
+	devices->sys_device = UCS_SYS_DEVICE_ID_UNKNOWN;
+	*tl_devices_p = devices;
+	*num_tl_devices_p = 1;
+    return UCS_OK;
+}
+
 
 UCT_TL_DEFINE(&uct_utofu_component,
 			  utofu,

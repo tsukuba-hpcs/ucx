@@ -11,8 +11,7 @@ noinst_HEADERS = \
 
 libuct_utofu_la_SOURCES = \
 	utofu_iface.c \
-	utofu_md.c \
-	utofu_device.c
+	utofu_md.c
 
 
 include $(top_srcdir)/config/module.am
