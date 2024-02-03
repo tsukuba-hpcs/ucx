@@ -1,5 +1,24 @@
 #include "utofu_def.h"
 
+
+
+ucs_status_t uct_utofu_iface_get_address(uct_iface_h tl_iface,
+										 uct_iface_addr_t *addr) {
+    uct_utofu_iface_t *iface = ucs_derived_of(tl_iface, uct_utofu_iface_t);
+    uct_utofu_iface_addr_t *iface_addr = (uct_utofu_iface_addr_t *)addr;
+
+    iface_addr->vcq_id = iface->md->vcq_id;
+
+    return (UCS_OK);
+}
+
+ucs_status_t uct_utofu_iface_get_device_address(uct_iface_t *tl_iface,
+												uct_device_addr_t *addr)
+{
+	return UCS_OK;
+}
+
+
 static ucs_config_field_t uct_utofu_iface_config_table[] = {
     {NULL}
 };
@@ -23,11 +42,11 @@ static uct_iface_ops_t uct_utofu_iface_ops = {
     .ep_pending_purge = NULL,
     .ep_pending_add = NULL,
     .ep_flush = NULL,
-    .ep_fence = NULL,
+    .ep_fence = uct_base_ep_fence,
     .ep_check = NULL,
-    .ep_create = NULL,
-    .ep_destroy = NULL,
-    .ep_get_address = NULL,
+    .ep_create = UCS_CLASS_NEW_FUNC_NAME(uct_utofu_ep_t),
+    .ep_destroy = UCS_CLASS_DELETE_FUNC_NAME(uct_utofu_ep_t),
+    .ep_get_address = uct_utofu_ep_get_address,
     .ep_connect_to_ep = NULL,
     .iface_flush = NULL,
     .iface_fence = NULL,
@@ -36,10 +55,10 @@ static uct_iface_ops_t uct_utofu_iface_ops = {
     .iface_progress = NULL,
     .iface_event_fd_get = NULL,
     .iface_event_arm = NULL,
-    .iface_close = NULL,
-    .iface_query = NULL,
-    .iface_get_address = NULL,
-    .iface_get_device_address = NULL,
+    .iface_close = UCS_CLASS_DELETE_FUNC_NAME(uct_utofu_iface_t),
+    .iface_query = uct_utofu_iface_query,
+    .iface_get_address = uct_utofu_iface_get_address,
+    .iface_get_device_address = uct_utofu_iface_get_device_address,
     .iface_is_reachable       = NULL,
 };
 
