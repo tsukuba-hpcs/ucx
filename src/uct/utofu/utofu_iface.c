@@ -18,6 +18,29 @@ ucs_status_t uct_utofu_iface_get_device_address(uct_iface_t *tl_iface,
 	return UCS_OK;
 }
 
+ucs_status_t uct_utofu_iface_flush(uct_iface_h tl_iface, unsigned flags, uct_completion_t *comp) {
+    ucs_debug("uct_utofu_iface_flush");
+    return (UCS_ERR_NOT_IMPLEMENTED);
+}
+
+void uct_utofu_iface_progress_enable(uct_iface_h tl_iface, unsigned flags) {
+    ucs_debug("uct_utofu_iface_progress_enable");
+    uct_base_iface_progress_enable(tl_iface, flags);
+}
+
+void uct_utofu_iface_progress_disable(uct_iface_h tl_iface, unsigned flags) {
+    ucs_debug("uct_utofu_iface_progress_disable");
+}
+
+unsigned uct_utofu_iface_progress(uct_iface_h tl_iface) {
+    ucs_debug("uct_utofu_iface_progress");
+    return (0);
+}
+
+int uct_utofu_iface_is_reachable(uct_iface_h tl_iface, const uct_device_addr_t *device_addr, const uct_iface_addr_t *iface_addr) {
+    ucs_debug("uct_utofu_iface_is_reachable");
+    return (1);
+}
 
 static ucs_config_field_t uct_utofu_iface_config_table[] = {
     {NULL}
@@ -41,25 +64,25 @@ static uct_iface_ops_t uct_utofu_iface_ops = {
     .ep_atomic32_fetch = NULL,
     .ep_pending_purge = NULL,
     .ep_pending_add = NULL,
-    .ep_flush = NULL,
+    .ep_flush = uct_utofu_ep_flush,
     .ep_fence = uct_base_ep_fence,
     .ep_check = NULL,
     .ep_create = UCS_CLASS_NEW_FUNC_NAME(uct_utofu_ep_t),
     .ep_destroy = UCS_CLASS_DELETE_FUNC_NAME(uct_utofu_ep_t),
     .ep_get_address = uct_utofu_ep_get_address,
     .ep_connect_to_ep = NULL,
-    .iface_flush = NULL,
-    .iface_fence = NULL,
-    .iface_progress_enable = NULL,
-    .iface_progress_disable = NULL,
-    .iface_progress = NULL,
+    .iface_flush = uct_utofu_iface_flush,
+    .iface_fence = uct_base_iface_fence,
+    .iface_progress_enable = uct_utofu_iface_progress_enable,
+    .iface_progress_disable = uct_utofu_iface_progress_disable,
+    .iface_progress = uct_utofu_iface_progress,
     .iface_event_fd_get = NULL,
     .iface_event_arm = NULL,
     .iface_close = UCS_CLASS_DELETE_FUNC_NAME(uct_utofu_iface_t),
     .iface_query = uct_utofu_iface_query,
     .iface_get_address = uct_utofu_iface_get_address,
     .iface_get_device_address = uct_utofu_iface_get_device_address,
-    .iface_is_reachable       = NULL,
+    .iface_is_reachable       = uct_utofu_iface_is_reachable,
 };
 
 static uct_iface_internal_ops_t uct_utofu_iface_internal_ops = {

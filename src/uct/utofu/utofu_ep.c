@@ -45,3 +45,8 @@ static UCS_CLASS_CLEANUP_FUNC(uct_utofu_ep_t) {
 UCS_CLASS_DEFINE(uct_utofu_ep_t, uct_base_ep_t);
 UCS_CLASS_DEFINE_NEW_FUNC(uct_utofu_ep_t, uct_ep_t, const uct_ep_params_t *);
 UCS_CLASS_DEFINE_DELETE_FUNC(uct_utofu_ep_t, uct_ep_t);
+
+ucs_status_t uct_utofu_ep_flush(uct_ep_h tl_ep, unsigned flags, uct_completion_t *comp) {
+    ucs_debug("uct_utofu_ep_flush");
+    return (UCS_ERR_NOT_IMPLEMENTED);
+}
