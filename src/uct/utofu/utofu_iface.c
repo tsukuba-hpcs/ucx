@@ -1,11 +1,54 @@
 #include "utofu_def.h"
 
 
+ucs_status_t uct_utofu_iface_query(uct_iface_h tl_iface, uct_iface_attr_t *iface_attr) {
+    ucs_debug("uct_utofu_iface_query");
+    iface_attr->cap.flags = 
+		UCT_IFACE_FLAG_CONNECT_TO_EP;
+
+    iface_attr->device_addr_len = 0;
+    iface_attr->iface_addr_len = sizeof(uct_utofu_iface_addr_t);
+    iface_attr->ep_addr_len = sizeof(uct_utofu_iface_addr_t);
+    iface_attr->max_conn_priv = 0;
+
+    // Aactive Message
+	iface_attr->cap.am.max_iov          =  1;
+	iface_attr->cap.am.opt_zcopy_align  =  1;
+	iface_attr->cap.am.align_mtu        =  1;
+    iface_attr->cap.am.max_short        =  32;
+	iface_attr->cap.am.max_bcopy        =  64;
+    iface_attr->cap.am.max_zcopy        =  128;
+
+    iface_attr->cap.flags =
+        UCT_IFACE_FLAG_AM_SHORT  | 
+		UCT_IFACE_FLAG_AM_BCOPY  |
+        UCT_IFACE_FLAG_AM_ZCOPY  |
+        UCT_IFACE_FLAG_CB_SYNC  |
+		UCT_IFACE_FLAG_CB_ASYNC  |
+		UCT_IFACE_FLAG_PENDING	 |
+		UCT_IFACE_FLAG_EP_CHECK  |
+		UCT_IFACE_FLAG_CONNECT_TO_IFACE |
+		UCT_IFACE_FLAG_CONNECT_TO_EP;
+
+	iface_attr->cap.flags |= UCT_IFACE_FLAG_ATOMIC_CPU;
+
+    iface_attr->overhead = 50e-9;
+	iface_attr->latency = ucs_linear_func_make(70e-9, 0);
+	iface_attr->priority = 0;
+
+	iface_attr->bandwidth.dedicated = 6800 * UCS_MBYTE;
+	iface_attr->bandwidth.shared = 0;
+
+	iface_attr->dev_num_paths = 1;
+
+    return (UCS_OK);
+}
 
 ucs_status_t uct_utofu_iface_get_address(uct_iface_h tl_iface,
 										 uct_iface_addr_t *addr) {
     uct_utofu_iface_t *iface = ucs_derived_of(tl_iface, uct_utofu_iface_t);
     uct_utofu_iface_addr_t *iface_addr = (uct_utofu_iface_addr_t *)addr;
+    ucs_debug("uct_utofu_iface_get_address");
 
     iface_addr->vcq_id = iface->md->vcq_id;
 
@@ -62,7 +105,7 @@ static uct_iface_ops_t uct_utofu_iface_ops = {
     .ep_atomic_cswap32 = NULL,
     .ep_atomic32_post = NULL,
     .ep_atomic32_fetch = NULL,
-    .ep_pending_purge = NULL,
+    .ep_pending_purge = uct_utofu_ep_pending_purge,
     .ep_pending_add = NULL,
     .ep_flush = uct_utofu_ep_flush,
     .ep_fence = uct_base_ep_fence,
@@ -86,7 +129,7 @@ static uct_iface_ops_t uct_utofu_iface_ops = {
 };
 
 static uct_iface_internal_ops_t uct_utofu_iface_internal_ops = {
-	.iface_estimate_perf = NULL,
+	.iface_estimate_perf = uct_base_iface_estimate_perf,
 };
 
 static UCS_CLASS_INIT_FUNC(uct_utofu_iface_t,
@@ -107,7 +150,7 @@ static UCS_CLASS_INIT_FUNC(uct_utofu_iface_t,
         UCS_STATS_ARG(params->stats_root)
         UCS_STATS_ARG(UCT_UTOFU_MD_NAME));
     self->md = md;
-    return UCS_ERR_NOT_IMPLEMENTED;
+    return UCS_OK;
 }
 
 static UCS_CLASS_CLEANUP_FUNC(uct_utofu_iface_t)
@@ -126,10 +169,12 @@ UCS_CLASS_DEFINE_NEW_FUNC(uct_utofu_iface_t, uct_iface_t, uct_md_h,
 ucs_status_t uct_utofu_query_devices(uct_md_h tl_md,
 									 uct_tl_device_resource_t **tl_devices_p,
 									 unsigned *num_tl_devices_p) {
+    uct_utofu_md_t *md;
 	uct_tl_device_resource_t *devices;
     ucs_debug("uct_utofu_query_devices\n");
+    md = ucs_derived_of(tl_md, uct_utofu_md_t);
 	devices = ucs_malloc(sizeof(*devices), "uct_tl_device_resource_t");
-	ucs_snprintf_zero(devices->name, 14, "Tofu-D");
+	ucs_snprintf_zero(devices->name, 14, "Tofu-D(TNI=%d)", md->tni_id);
 	devices->type = UCT_DEVICE_TYPE_NET;
 	devices->sys_device = UCS_SYS_DEVICE_ID_UNKNOWN;
 	*tl_devices_p = devices;

@@ -20,6 +20,7 @@ typedef struct uct_utofu_md uct_utofu_md_t;
 struct uct_utofu_iface {
     uct_base_iface_t super;
     uct_utofu_md_t *md;
+	ucs_arbiter_t arbiter;
 };
 
 typedef struct uct_utofu_iface uct_utofu_iface_t;
@@ -45,6 +46,7 @@ typedef struct uct_utofu_ep {
     uct_base_ep_t super;
     utofu_vcq_id_t peer_vcq_id;
     uct_utofu_iface_t *iface;
+    ucs_arbiter_group_t arb_group;
 } uct_utofu_ep_t;
 
 typedef struct uct_utofu_ep_address {
@@ -57,6 +59,7 @@ ucs_status_t uct_utofu_ep_get_address(uct_ep_h tl_ep,
 ucs_status_t uct_utofu_iface_query(uct_iface_h tl_iface, uct_iface_attr_t *iface_attr);
 ucs_status_t uct_utofu_iface_get_address(uct_iface_h tl_iface,
 										 uct_iface_addr_t *addr);
+void uct_utofu_ep_pending_purge(uct_ep_h tl_ep, uct_pending_purge_callback_t cb, void *arg);
 ucs_status_t uct_utofu_ep_flush(uct_ep_h tl_ep, unsigned flags, uct_completion_t *comp);
 
 UCS_CLASS_DECLARE(uct_utofu_ep_t, const uct_ep_params_t *);

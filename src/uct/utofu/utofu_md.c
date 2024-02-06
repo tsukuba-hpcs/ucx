@@ -22,7 +22,12 @@ ucs_status_t uct_utofu_md_query(uct_md_h tl_md,
 {
     //uct_utofu_md_t *md = ucs_derived_of(tl_md, uct_utofu_md_t);
     ucs_debug("uct_utofu_md_query tl_md=%p\n", tl_md);
-
+    md_attr->cap.flags =
+        UCT_MD_FLAG_ALLOC     |
+		UCT_MD_FLAG_REG       |
+		UCT_MD_FLAG_INVALIDATE|
+		UCT_MD_FLAG_RKEY_PTR  |
+		UCT_MD_FLAG_NEED_RKEY;
     return (UCS_OK);
 }
 
@@ -95,7 +100,7 @@ ucs_status_t uct_utofu_md_open(uct_component_h component,
 uct_component_t uct_utofu_component = {
     .query_md_resources = uct_utofu_query_md_resources,
     .md_open = uct_utofu_md_open,
-    .cm_open = NULL,
+    .cm_open = ucs_empty_function_return_unsupported,
     .rkey_unpack = NULL,
     .rkey_ptr = NULL,
     .rkey_release = NULL,
