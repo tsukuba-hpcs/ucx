@@ -43,13 +43,54 @@ void uct_utofu_md_close(uct_md_h tl_md) {
     free(md);
 }
 
+UCS_PROFILE_FUNC(ucs_status_t, uct_utofu_mem_reg,
+				 (tl_md, address, length, flags, memh_p),
+				 uct_md_h tl_md,
+				 void *address,
+				 size_t length,
+				 unsigned flags,
+				 uct_mem_h *memh_p) {
+    uct_utofu_md_t *md;
+    uct_utofu_rkey_t *rkey;
+    int rc;
+    md = ucs_derived_of(tl_md, uct_utofu_md_t);
+    rkey = ucs_malloc(sizeof(*rkey), "uct_utofu_rkey_t");
+    rkey->buf = address;
+    rc = utofu_reg_mem(md->vcq_hdl, address, length, 0, &rkey->stadd);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("utofu_reg_mem failed with %d", rc);
+        return UCS_ERR_INVALID_PARAM;
+    }
+    ucs_debug("utofu_reg_mem: VCQ_ID: %lu, buf: %p, size: %lu, stadd: %lu", md->vcq_id, rkey->buf, length, rkey->stadd);
+    *memh_p = rkey;
+    return UCS_OK;
+}
+
+UCS_PROFILE_FUNC(ucs_status_t, uct_utofu_mem_dereg,
+				 (tl_md, params),
+				 uct_md_h tl_md,
+				 const uct_md_mem_dereg_params_t *params) {
+    uct_utofu_md_t *md;
+    uct_utofu_rkey_t *rkey;
+    int rc;
+    md = ucs_derived_of(tl_md, uct_utofu_md_t);
+    rkey = (uct_utofu_rkey_t *)(params->memh);
+    rc = utofu_dereg_mem(md->vcq_hdl, rkey->stadd, 0);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("utofu_dereg_mem failed with %d", rc);
+        return UCS_ERR_INVALID_PARAM;
+    }
+    ucs_debug("utofu_dereg_mem: VCQ ID: %lu, buf: %p, stadd: %lu", md->vcq_id, rkey->buf, rkey->stadd);
+    return UCS_OK;
+}
+
 uct_md_ops_t md_ops = {
     .close = uct_utofu_md_close,
     .query = uct_utofu_md_query,
     .mem_alloc = NULL,
     .mem_free = NULL,
-    .mem_reg = NULL,
-    .mem_dereg = NULL,
+    .mem_reg = uct_utofu_mem_reg,
+    .mem_dereg = uct_utofu_mem_dereg,
     .mkey_pack = NULL,
     .detect_memory_type = NULL,
 };

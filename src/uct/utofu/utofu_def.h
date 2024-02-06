@@ -4,6 +4,7 @@
 #include <uct/api/uct.h>
 #include <uct/base/uct_iface.h>
 #include <uct/base/uct_md.h>
+#include <ucs/profile/profile.h>
 #include <ucs/sys/string.h>
 
 #include <utofu.h>
@@ -41,6 +42,11 @@ typedef struct uct_utofu_md {
     utofu_vcq_hdl_t vcq_hdl;
     utofu_vcq_id_t vcq_id;
 } uct_utofu_md_t;
+
+typedef struct __attribute__((packed)) {
+	utofu_stadd_t stadd;
+	void          *buf;
+} uct_utofu_rkey_t;
 
 typedef struct uct_utofu_ep {
     uct_base_ep_t super;
