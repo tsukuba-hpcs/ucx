@@ -57,7 +57,6 @@ void uct_utofu_ep_pending_purge(uct_ep_h tl_ep,
 UCS_CLASS_INIT_FUNC(uct_utofu_ep_t, const uct_ep_params_t *params) {
     uct_utofu_iface_t *iface;
     uct_utofu_iface_addr_t *remote_iface_addr;
-    ucs_debug("UCS_CLASS_INIT_FUNC(uct_utofu_ep_t, const uct_ep_params_t *params)");
     iface = ucs_derived_of(params->iface, uct_utofu_iface_t);
     remote_iface_addr = (uct_utofu_iface_addr_t *)params->iface_addr;
 
@@ -65,6 +64,8 @@ UCS_CLASS_INIT_FUNC(uct_utofu_ep_t, const uct_ep_params_t *params) {
 
     self->iface = iface;
     self->peer_vcq_id = remote_iface_addr->vcq_id;
+
+    ucs_debug("UCS_CLASS_INIT_FUNC(uct_utofu_ep_t, const uct_ep_params_t *params) peer_vcq_id=%zu", self->peer_vcq_id);
 
     ucs_arbiter_group_init(&self->arb_group);
 
