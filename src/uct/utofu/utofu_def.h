@@ -46,6 +46,7 @@ typedef struct uct_utofu_md {
 typedef struct __attribute__((packed)) {
 	utofu_stadd_t stadd;
 	void          *buf;
+    size_t        length;
 } uct_utofu_rkey_t;
 
 typedef struct uct_utofu_ep {

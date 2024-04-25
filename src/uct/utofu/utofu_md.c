@@ -22,6 +22,7 @@ ucs_status_t uct_utofu_md_query(uct_md_h tl_md,
 {
     //uct_utofu_md_t *md = ucs_derived_of(tl_md, uct_utofu_md_t);
     ucs_debug("uct_utofu_md_query tl_md=%p\n", tl_md);
+    md_attr->rkey_packed_size = sizeof(uct_utofu_rkey_t);
     md_attr->cap.flags =
         UCT_MD_FLAG_ALLOC     |
 		UCT_MD_FLAG_REG       |
@@ -56,6 +57,7 @@ UCS_PROFILE_FUNC(ucs_status_t, uct_utofu_mem_reg,
     md = ucs_derived_of(tl_md, uct_utofu_md_t);
     rkey = ucs_malloc(sizeof(*rkey), "uct_utofu_rkey_t");
     rkey->buf = address;
+    rkey->length = length;
     rc = utofu_reg_mem(md->vcq_hdl, address, length, 0, &rkey->stadd);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_reg_mem failed with %d", rc);
@@ -84,6 +86,14 @@ UCS_PROFILE_FUNC(ucs_status_t, uct_utofu_mem_dereg,
     return UCS_OK;
 }
 
+ucs_status_t uct_utofu_rkey_pack(uct_md_h tl_md, uct_mem_h memh,
+                                 const uct_md_mkey_pack_params_t *params,
+                                 void *rkey_buffer) {
+    uct_utofu_rkey_t *rkey = memh; 
+    memcpy(rkey_buffer, rkey, sizeof(*rkey));
+    return (UCS_OK);
+}
+
 uct_md_ops_t md_ops = {
     .close = uct_utofu_md_close,
     .query = uct_utofu_md_query,
@@ -91,7 +101,7 @@ uct_md_ops_t md_ops = {
     .mem_free = NULL,
     .mem_reg = uct_utofu_mem_reg,
     .mem_dereg = uct_utofu_mem_dereg,
-    .mkey_pack = NULL,
+    .mkey_pack = uct_utofu_rkey_pack,
     .detect_memory_type = NULL,
 };
 
