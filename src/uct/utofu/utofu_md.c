@@ -94,6 +94,18 @@ ucs_status_t uct_utofu_rkey_pack(uct_md_h tl_md, uct_mem_h memh,
     return (UCS_OK);
 }
 
+ucs_status_t uct_utofu_rkey_unpack(uct_component_t *component,
+                                   const void *rkey_buffer,
+                                   uct_rkey_t *rkey_p,
+                                   void **handle_p) {
+    uct_utofu_rkey_t *rkey;
+    rkey = ucs_malloc(sizeof(*rkey), "uct_utofu_rkey_t");
+    memcpy(rkey, rkey_buffer, sizeof(*rkey));
+    *rkey_p = (uct_rkey_t)rkey;
+    *handle_p = NULL;
+    return (UCS_OK);
+}
+
 uct_md_ops_t md_ops = {
     .close = uct_utofu_md_close,
     .query = uct_utofu_md_query,
@@ -152,7 +164,7 @@ uct_component_t uct_utofu_component = {
     .query_md_resources = uct_utofu_query_md_resources,
     .md_open = uct_utofu_md_open,
     .cm_open = ucs_empty_function_return_unsupported,
-    .rkey_unpack = NULL,
+    .rkey_unpack = uct_utofu_rkey_unpack,
     .rkey_ptr = NULL,
     .rkey_release = NULL,
     .name = UCT_UTOFU_MD_NAME,
