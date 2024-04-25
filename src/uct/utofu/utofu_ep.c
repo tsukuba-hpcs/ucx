@@ -89,3 +89,12 @@ ucs_status_t uct_utofu_ep_flush(uct_ep_h tl_ep, unsigned flags, uct_completion_t
     ucs_debug("uct_utofu_ep_flush");
     return (UCS_OK);
 }
+
+ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
+                              uint8_t id,
+                              uct_pack_callback_t pack_cb,
+                              void *arg,
+                              unsigned flags) {
+    unsigned int packed = 0;
+    return (packed);
+}

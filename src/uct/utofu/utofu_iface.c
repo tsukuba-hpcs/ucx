@@ -92,7 +92,7 @@ static ucs_config_field_t uct_utofu_iface_config_table[] = {
 static uct_iface_ops_t uct_utofu_iface_ops = {
     .ep_am_short = NULL,
     .ep_am_short_iov = NULL,
-    .ep_am_bcopy = NULL,
+    .ep_am_bcopy = uct_utofu_ep_am_bcopy,
     .ep_am_zcopy = NULL,
     .ep_put_short = NULL,
     .ep_put_bcopy = NULL,
@@ -141,6 +141,7 @@ static UCS_CLASS_INIT_FUNC(uct_utofu_iface_t,
 						   const uct_iface_params_t *params,
 						   const uct_iface_config_t *tl_config) {
     uct_utofu_md_t *md;
+    int rc;
     ucs_debug("UCS_CLASS_INIT_FUNC(uct_utofu_iface_t)\n");
     md = ucs_derived_of(tl_md, uct_utofu_md_t);
     UCS_CLASS_CALL_SUPER_INIT(uct_base_iface_t,
@@ -153,11 +154,39 @@ static UCS_CLASS_INIT_FUNC(uct_utofu_iface_t,
         UCS_STATS_ARG(params->stats_root)
         UCS_STATS_ARG(UCT_UTOFU_MD_NAME));
     self->md = md;
-    return UCS_OK;
+    self->am_rb_head = 0;
+    self->am_rb_tail = 0;
+    rc = utofu_reg_mem(md->vcq_hdl, &self->am_rb_tail,
+        sizeof(self->am_rb_tail), 0, &self->am_rb_tail_stadd);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("utofu_reg_mem failed with %d", rc);
+        return UCS_ERR_NO_RESOURCE;
+    }
+    self->am_rb = ucs_malloc(
+        UCT_UTOFU_RINGBUF_ITEM_SIZE * UCT_UTOFU_RINGBUF_ITEM_COUNT,
+        "am_rb");
+    rc = utofu_reg_mem(md->vcq_hdl, self->am_rb,
+        UCT_UTOFU_RINGBUF_ITEM_SIZE * UCT_UTOFU_RINGBUF_ITEM_COUNT,
+        0, &self->am_rb_stadd);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("utofu_reg_mem failed with %d", rc);
+        return UCS_ERR_NO_RESOURCE;
+    }
+    return (UCS_OK);
 }
 
 static UCS_CLASS_CLEANUP_FUNC(uct_utofu_iface_t)
 {
+    int rc;
+    rc = utofu_dereg_mem(self->md->vcq_hdl, self->am_rb_tail_stadd, 0);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("utofu_reg_mem failed with %d", rc);
+    }
+    rc = utofu_dereg_mem(self->md->vcq_hdl, self->am_rb_stadd, 0);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("utofu_reg_mem failed with %d", rc);
+    }
+    ucs_free(self->am_rb);
     return;
 }
 

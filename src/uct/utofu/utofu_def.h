@@ -11,6 +11,8 @@
 
 #define UCT_UTOFU_MD_NAME "utofu"
 #define UCT_UTOFU_CONFIG_PREFIX "UTOFU_"
+#define UCT_UTOFU_RINGBUF_ITEM_SIZE  (128)
+#define UCT_UTOFU_RINGBUF_ITEM_COUNT (1024*1024)
 
 typedef struct uct_utofu_iface_config {
     uct_iface_config_t super;
@@ -22,12 +24,21 @@ struct uct_utofu_iface {
     uct_base_iface_t super;
     uct_utofu_md_t *md;
 	ucs_arbiter_t arbiter;
+    // Active Message
+    ucs_mpool_t am_desc_mpool;
+    uint32_t am_rb_head;
+    uint32_t am_rb_tail;
+    utofu_stadd_t am_rb_tail_stadd;
+    uint8_t *am_rb;
+    utofu_stadd_t am_rb_stadd;
 };
 
 typedef struct uct_utofu_iface uct_utofu_iface_t;
 
 typedef struct uct_utofu_iface_addr {
     utofu_vcq_id_t vcq_id;
+    // Active Message
+    utofu_stadd_t am_rb_tail;
 } uct_utofu_iface_addr_t;
 
 extern uct_component_t uct_utofu_component;
@@ -68,6 +79,11 @@ ucs_status_t uct_utofu_iface_get_address(uct_iface_h tl_iface,
 										 uct_iface_addr_t *addr);
 void uct_utofu_ep_pending_purge(uct_ep_h tl_ep, uct_pending_purge_callback_t cb, void *arg);
 ucs_status_t uct_utofu_ep_flush(uct_ep_h tl_ep, unsigned flags, uct_completion_t *comp);
+ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
+                              uint8_t id,
+                              uct_pack_callback_t pack_cb,
+                              void *arg,
+                              unsigned flags);
 
 UCS_CLASS_DECLARE(uct_utofu_ep_t, const uct_ep_params_t *);
 UCS_CLASS_DECLARE_NEW_FUNC(uct_utofu_ep_t, uct_ep_t, const uct_ep_params_t *);
