@@ -87,5 +87,5 @@ UCS_CLASS_DEFINE_DELETE_FUNC(uct_utofu_ep_t, uct_ep_t);
 
 ucs_status_t uct_utofu_ep_flush(uct_ep_h tl_ep, unsigned flags, uct_completion_t *comp) {
     ucs_debug("uct_utofu_ep_flush");
-    return (UCS_ERR_NOT_IMPLEMENTED);
+    return (UCS_OK);
 }
