@@ -70,6 +70,9 @@
 #  include <uct/ugni/smsg/ugni_smsg_ep.h>
 #endif
 
+#ifdef HAVE_UTOFU
+#  include <uct/utofu/utofu_def.h>
+#endif
 
 static void print_size(const char *name, size_t size)
 {
@@ -255,6 +258,13 @@ void print_type_info(const char * tl_name)
         PRINT_SIZE(uct_ugni_md_t);
         PRINT_SIZE(uct_ugni_compact_smsg_attr_t);
 
+        printf("\n");
+    }
+#endif
+
+#ifdef HAVE_UTOFU
+    if (tl_name == NULL || !strcasecmp(tl_name, "utofu")) {
+        printf("UTOFU:\n");
         printf("\n");
     }
 #endif
