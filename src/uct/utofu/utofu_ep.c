@@ -103,24 +103,24 @@ ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
     struct utofu_mrq_notice mnotice;
     uct_utofu_ep_t *ep = ucs_derived_of(tl_ep, uct_utofu_ep_t);
     unsigned int length = 0;
-    uct_utofu_am_bcopy_buf *buf = NULL;
+    uct_utofu_am_buf *buf = NULL;
     utofu_stadd_t buf_stadd;
     utofu_stadd_t target_stadd;
     void *cbdata;
 
     UCT_TL_IFACE_GET_TX_DESC(&ep->iface->super, &ep->iface->mp.buf, buf, return UCS_ERR_NO_RESOURCE);
     ucs_assert(buf != NULL);
-    buf->complete = 0;
+    buf->notify = 0;
     buf->am_id = id;
     length = pack_cb(&buf->data, arg);
     buf->length = length;
     ucs_debug("packed length=%u", length);
-    rc = utofu_reg_mem(ep->iface->md->vcq_hdl, buf, sizeof(uct_utofu_am_bcopy_buf) + length, 0, &buf_stadd);
+    rc = utofu_reg_mem(ep->iface->md->vcq_hdl, buf, sizeof(uct_utofu_am_buf) + length, 0, &buf_stadd);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_ref_mem error rc=%d", rc);
         return (-1);
     }
-    ucs_assert(sizeof(uct_utofu_am_bcopy_buf) + length <= UCT_UTOFU_RINGBUF_ITEM_SIZE);
+    ucs_assert(sizeof(uct_utofu_am_buf) + length <= UCT_UTOFU_RINGBUF_ITEM_SIZE);
 
     ucs_debug("uct_utofu_ep_am_bcopy vcq_id=%zu", ep->vcq_id);
     rc = utofu_armw8(ep->iface->md->vcq_hdl, ep->vcq_id, UTOFU_ARMW_OP_ADD, 1, ep->am_rb_tail_stadd, 0, UTOFU_ONESIDED_FLAG_LOCAL_MRQ_NOTICE, NULL);
@@ -142,11 +142,22 @@ ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
     ucs_debug("remote value=%zu", mnotice.rmt_value);
     target_stadd = ep->am_rb_stadd + (mnotice.rmt_value % UCT_UTOFU_RINGBUF_ITEM_COUNT) * (UCT_UTOFU_RINGBUF_ITEM_SIZE);
     rc = utofu_put(ep->iface->md->vcq_hdl, ep->vcq_id, buf_stadd, target_stadd,
-        sizeof(uct_utofu_am_bcopy_buf) + length, mnotice.rmt_value % 256,
-        UTOFU_ONESIDED_FLAG_TCQ_NOTICE | UTOFU_ONESIDED_FLAG_REMOTE_MRQ_NOTICE, NULL);
+        sizeof(uct_utofu_am_buf) + length, 0, UTOFU_ONESIDED_FLAG_TCQ_NOTICE, NULL);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_put error %d", rc);
         return (-1);
+    }
+    rc = utofu_armw4(ep->iface->md->vcq_hdl, ep->vcq_id, UTOFU_ARMW_OP_ADD,
+        UCT_UTOFU_AM_BCOPY, target_stadd, 0, UTOFU_ONESIDED_FLAG_TCQ_NOTICE, NULL);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("utofu_put error %d", rc);
+        return (-1);
+    }
+    do {
+        rc = utofu_poll_tcq(ep->iface->md->vcq_hdl, 0, &cbdata);
+    } while (rc == UTOFU_ERR_NOT_FOUND);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("utofu_poll_tcq error rc=%d", rc);
     }
     do {
         rc = utofu_poll_tcq(ep->iface->md->vcq_hdl, 0, &cbdata);
@@ -159,6 +170,22 @@ ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
     return (length);
 }
 
+ucs_status_t uct_utofu_ep_am_zcopy(uct_ep_h tl_ep, uint8_t id, const void *header,
+                                   unsigned header_length, const uct_iov_t *iov,
+                                   size_t iovcnt, unsigned flags, uct_completion_t *comp) {
+    ucs_debug("call uct_utofu_ep_am_zcopy");
+    return (UCS_ERR_NOT_IMPLEMENTED);
+}
+
+ucs_status_t uct_utofu_ep_get_short(uct_ep_h ep,
+                                    void *buffer,
+                                    unsigned length,
+                                    uint64_t remote_addr,
+                                    uct_rkey_t rkey) {
+    ucs_debug("uct_utofu_ep_get_short");
+    return (UCS_ERR_NOT_IMPLEMENTED);
+}
+
 ucs_status_t uct_utofu_ep_get_bcopy(uct_ep_h ep,
                                     uct_unpack_callback_t unpack_cb,
                                     void *arg,
@@ -167,5 +194,15 @@ ucs_status_t uct_utofu_ep_get_bcopy(uct_ep_h ep,
                                     uct_rkey_t rkey,
                                     uct_completion_t *comp) {
     ucs_debug("uct_utofu_ep_get_bcopy");
+    return (UCS_ERR_NOT_IMPLEMENTED);
+}
+
+ucs_status_t uct_utofu_ep_get_zcopy(uct_ep_h ep,
+                                    const uct_iov_t *iov,
+                                    size_t iovcnt,
+                                    uint64_t remote_addr,
+                                    uct_rkey_t rkey,
+                                    uct_completion_t *comp) {
+    ucs_debug("uct_utofu_ep_get_zcopy");
     return (UCS_ERR_NOT_IMPLEMENTED);
 }

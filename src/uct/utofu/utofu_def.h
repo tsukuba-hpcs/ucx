@@ -90,22 +90,39 @@ ucs_status_t uct_utofu_iface_get_address(uct_iface_h tl_iface,
 void uct_utofu_ep_pending_purge(uct_ep_h tl_ep, uct_pending_purge_callback_t cb, void *arg);
 ucs_status_t uct_utofu_ep_flush(uct_ep_h tl_ep, unsigned flags, uct_completion_t *comp);
 
+#define UCT_UTOFU_AM_BCOPY UCS_BIT(1)
+#define UCT_UTOFU_AM_ZCOPY UCS_BIT(16)
+
 typedef struct {
-    uint8_t complete;
+    uint32_t notify;
     uint8_t am_id;
     size_t length;
     uint8_t data[];
-} uct_utofu_am_bcopy_buf;
+} uct_utofu_am_buf;
 
 ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
                               uint8_t id,
                               uct_pack_callback_t pack_cb,
                               void *arg,
                               unsigned flags);
+ucs_status_t uct_utofu_ep_am_zcopy(uct_ep_h tl_ep, uint8_t id, const void *header,
+                                   unsigned header_length, const uct_iov_t *iov,
+                                   size_t iovcnt, unsigned flags, uct_completion_t *comp);
+ucs_status_t uct_utofu_ep_get_short(uct_ep_h ep,
+                                    void *buffer,
+                                    unsigned length,
+                                    uint64_t remote_addr,
+                                    uct_rkey_t rkey);
 ucs_status_t uct_utofu_ep_get_bcopy(uct_ep_h ep,
                                     uct_unpack_callback_t unpack_cb,
                                     void *arg,
                                     size_t length,
+                                    uint64_t remote_addr,
+                                    uct_rkey_t rkey,
+                                    uct_completion_t *comp);
+ucs_status_t uct_utofu_ep_get_zcopy(uct_ep_h ep,
+                                    const uct_iov_t *iov,
+                                    size_t iovcnt,
                                     uint64_t remote_addr,
                                     uct_rkey_t rkey,
                                     uct_completion_t *comp);

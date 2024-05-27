@@ -3,8 +3,6 @@
 
 ucs_status_t uct_utofu_iface_query(uct_iface_h tl_iface, uct_iface_attr_t *iface_attr) {
     ucs_debug("uct_utofu_iface_query");
-    iface_attr->cap.flags = 
-		UCT_IFACE_FLAG_CONNECT_TO_EP;
 
     iface_attr->device_addr_len = 0;
     iface_attr->iface_addr_len = sizeof(uct_utofu_iface_addr_t);
@@ -12,17 +10,20 @@ ucs_status_t uct_utofu_iface_query(uct_iface_h tl_iface, uct_iface_attr_t *iface
     iface_attr->max_conn_priv = 0;
 
     // Aactive Message
-	iface_attr->cap.am.max_iov          =  1;
-	iface_attr->cap.am.opt_zcopy_align  =  1;
-	iface_attr->cap.am.align_mtu        =  1;
+	iface_attr->cap.am.max_iov          =  64;
+	iface_attr->cap.am.opt_zcopy_align  =  512;
+	iface_attr->cap.am.align_mtu        =  128;
     iface_attr->cap.am.max_short        =  32;
-	iface_attr->cap.am.max_bcopy        =  64;
-    iface_attr->cap.am.max_zcopy        =  128;
+	iface_attr->cap.am.max_bcopy        =  512;
+    iface_attr->cap.am.min_zcopy        =  0;
+    iface_attr->cap.am.max_zcopy        =  512;
 
-    iface_attr->cap.flags =
-        UCT_IFACE_FLAG_AM_SHORT  | 
+    iface_attr->cap.flags = 
 		UCT_IFACE_FLAG_AM_BCOPY  |
         UCT_IFACE_FLAG_AM_ZCOPY  |
+        UCT_IFACE_FLAG_GET_SHORT |
+        UCT_IFACE_FLAG_GET_BCOPY |
+        UCT_IFACE_FLAG_GET_ZCOPY |
         UCT_IFACE_FLAG_CB_SYNC  |
 		UCT_IFACE_FLAG_CB_ASYNC  |
 		UCT_IFACE_FLAG_PENDING	 |
@@ -32,11 +33,11 @@ ucs_status_t uct_utofu_iface_query(uct_iface_h tl_iface, uct_iface_attr_t *iface
 
 	iface_attr->cap.flags |= UCT_IFACE_FLAG_ATOMIC_CPU;
 
-    iface_attr->overhead = 50e-9;
-	iface_attr->latency = ucs_linear_func_make(70e-9, 0);
-	iface_attr->priority = 0;
+    iface_attr->overhead = 0;
+	iface_attr->latency = ucs_linear_func_make(0, 0);
+	iface_attr->priority = 77;
 
-	iface_attr->bandwidth.dedicated = 6800 * UCS_MBYTE;
+	iface_attr->bandwidth.dedicated = 68 * UCS_MBYTE;
 	iface_attr->bandwidth.shared = 0;
 
 	iface_attr->dev_num_paths = 1;
@@ -79,37 +80,23 @@ void uct_utofu_iface_progress_disable(uct_iface_h tl_iface, unsigned flags) {
 
 unsigned uct_utofu_iface_progress(uct_iface_h tl_iface) {
     uct_utofu_iface_t *iface = ucs_derived_of(tl_iface, uct_utofu_iface_t);
-    struct utofu_mrq_notice notice;
-    int rc;
     unsigned count = 0;
     ucs_status_t status;
+    uct_utofu_am_buf *head = (uct_utofu_am_buf *)(iface->am_rb + 
+        (UCT_UTOFU_RINGBUF_ITEM_SIZE * (iface->am_rb_head % UCT_UTOFU_RINGBUF_ITEM_COUNT)));
     ucs_debug("uct_utofu_iface_progress head=%zu tail=%zu", iface->am_rb_head, iface->am_rb_tail);
-    if (iface->am_rb_head < iface->am_rb_tail) {
-        uct_utofu_am_bcopy_buf *head = (uct_utofu_am_bcopy_buf *)(iface->am_rb + (UCT_UTOFU_RINGBUF_ITEM_SIZE * iface->am_rb_head));
-        rc = utofu_poll_mrq(iface->md->vcq_hdl, 0, &notice);
-        if (rc != UTOFU_SUCCESS && rc != UTOFU_ERR_NOT_FOUND) {
-            ucs_error("utofu_poll_mrq error: %d", rc);
+
+    while (head->notify) {
+        iface->am_rb_head++;
+        count++;
+        status = uct_iface_invoke_am(&iface->super, head->am_id, head->data,
+                                    head->length, UCT_CB_PARAM_FLAG_DESC);
+        if (status != UCS_OK) {
+            ucs_error("uct_iface_invoke_am failed %s", ucs_status_string(status));
         }
-        if (rc == UTOFU_SUCCESS) {
-            ucs_debug("mrq edata=%zu", notice.edata);
-            for (uint64_t k = iface->am_rb_head; k < iface->am_rb_tail; k++) {
-                if (k % 256 == notice.edata) {
-                    uct_utofu_am_bcopy_buf *kbuf = (uct_utofu_am_bcopy_buf *)(iface->am_rb + (UCT_UTOFU_RINGBUF_ITEM_SIZE * k));
-                    ucs_debug("complete k=%zu", k);
-                    kbuf->complete = 1;
-                }
-            }
-        }
-        while (head->complete) {
-            iface->am_rb_head++;
-            count++;
-            status = uct_iface_invoke_am(&iface->super, head->am_id, head->data,
-                                     head->length, UCT_CB_PARAM_FLAG_DESC);
-            if (status != UCS_OK) {
-                ucs_error("uct_iface_invoke_am failed %s", ucs_status_string(status));
-            }
-            head = (uct_utofu_am_bcopy_buf *)(iface->am_rb + (UCT_UTOFU_RINGBUF_ITEM_SIZE * iface->am_rb_head));
-        }
+        head->notify = 0;
+        head = (uct_utofu_am_buf *)(iface->am_rb + 
+            (UCT_UTOFU_RINGBUF_ITEM_SIZE * (iface->am_rb_head % UCT_UTOFU_RINGBUF_ITEM_COUNT)));
     }
     return (count);
 }
@@ -127,12 +114,13 @@ static uct_iface_ops_t uct_utofu_iface_ops = {
     .ep_am_short = NULL,
     .ep_am_short_iov = NULL,
     .ep_am_bcopy = uct_utofu_ep_am_bcopy,
-    .ep_am_zcopy = NULL,
+    .ep_am_zcopy = uct_utofu_ep_am_zcopy,
     .ep_put_short = NULL,
     .ep_put_bcopy = NULL,
     .ep_put_zcopy = NULL,
-    .ep_get_bcopy = NULL,
-    .ep_get_zcopy = NULL,
+    .ep_get_short = uct_utofu_ep_get_short,
+    .ep_get_bcopy = uct_utofu_ep_get_bcopy,
+    .ep_get_zcopy = uct_utofu_ep_get_zcopy,
     .ep_atomic_cswap64 = NULL,
     .ep_atomic64_post = NULL,
     .ep_atomic64_fetch = NULL,

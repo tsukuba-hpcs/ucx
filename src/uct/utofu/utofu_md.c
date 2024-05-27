@@ -29,6 +29,13 @@ ucs_status_t uct_utofu_md_query(uct_md_h tl_md,
 		UCT_MD_FLAG_INVALIDATE|
 		UCT_MD_FLAG_RKEY_PTR  |
 		UCT_MD_FLAG_NEED_RKEY;
+    md_attr->reg_mem_types    = UCS_BIT(UCS_MEMORY_TYPE_HOST);
+    md_attr->cache_mem_types  = UCS_BIT(UCS_MEMORY_TYPE_HOST);
+    md_attr->alloc_mem_types  = UCS_BIT(UCS_MEMORY_TYPE_HOST);
+    md_attr->access_mem_types = UCS_BIT(UCS_MEMORY_TYPE_HOST);
+    md_attr->detect_mem_types = UCS_BIT(UCS_MEMORY_TYPE_HOST);
+    md_attr->dmabuf_mem_types = UCS_BIT(UCS_MEMORY_TYPE_HOST);
+    md_attr->max_alloc        = SIZE_MAX;
     return (UCS_OK);
 }
 
