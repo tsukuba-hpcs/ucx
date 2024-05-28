@@ -67,6 +67,7 @@ typedef struct uct_utofu_md {
     utofu_tni_id_t tni_id;
     utofu_vcq_hdl_t vcq_hdl;
     utofu_vcq_id_t vcq_id;
+    utofu_vcq_hdl_t imm_vcq_hdl;
 } uct_utofu_md_t;
 
 typedef struct __attribute__((packed)) {

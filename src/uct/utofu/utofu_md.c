@@ -48,6 +48,10 @@ void uct_utofu_md_close(uct_md_h tl_md) {
     if (rc != UTOFU_SUCCESS) {
         ucs_error("error on utofu_free_vcq rc=%d", rc);
     }
+    rc = utofu_free_vcq(md->imm_vcq_hdl);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("error on utofu_free_vcq rc=%d", rc);
+    }
     free(md);
 }
 
@@ -163,6 +167,12 @@ ucs_status_t uct_utofu_md_open(uct_component_h component,
         utofu_free_vcq(md->vcq_hdl);
         ucs_free(md);
         return UCS_ERR_UNSUPPORTED;
+    }
+    rc = utofu_create_vcq(md->tni_id, 0, &md->imm_vcq_hdl);
+    if (rc != UTOFU_SUCCESS) {
+		ucs_error("error on utofu_create_vcq rc=%d", rc);
+        ucs_free(md);
+		return UCS_ERR_UNSUPPORTED;
     }
     //uct_utofu_md_config_t *config = NULL;
     //config = ucs_derived_of(md_config, uct_utofu_md_config_t); 

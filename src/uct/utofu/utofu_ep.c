@@ -123,13 +123,13 @@ ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
     ucs_assert(sizeof(uct_utofu_am_buf) + length <= UCT_UTOFU_AM_RB_ITEM_SIZE);
 
     ucs_debug("uct_utofu_ep_am_bcopy vcq_id=%zu", ep->vcq_id);
-    rc = utofu_armw8(ep->iface->md->vcq_hdl, ep->vcq_id, UTOFU_ARMW_OP_ADD, 1, ep->am_rb_tail_stadd, 0, UTOFU_ONESIDED_FLAG_LOCAL_MRQ_NOTICE, NULL);
+    rc = utofu_armw8(ep->iface->md->imm_vcq_hdl, ep->vcq_id, UTOFU_ARMW_OP_ADD, 1, ep->am_rb_tail_stadd, 0, UTOFU_ONESIDED_FLAG_LOCAL_MRQ_NOTICE, NULL);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_armw4 error rc=%d", rc);
         return (-1);
     }
     do {
-        rc = utofu_poll_mrq(ep->iface->md->vcq_hdl, 0, &mnotice);
+        rc = utofu_poll_mrq(ep->iface->md->imm_vcq_hdl, 0, &mnotice);
     } while (rc == UTOFU_ERR_NOT_FOUND);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_poll_mrq error rc=%d", rc);
