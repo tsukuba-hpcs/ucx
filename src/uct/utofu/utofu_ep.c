@@ -117,10 +117,10 @@ ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
     ucs_debug("packed length=%u", length);
     rc = utofu_reg_mem(ep->iface->md->vcq_hdl, buf, sizeof(uct_utofu_am_buf) + length, 0, &buf_stadd);
     if (rc != UTOFU_SUCCESS) {
-        ucs_error("utofu_ref_mem error rc=%d", rc);
+        ucs_error("utofu_reg_mem error rc=%d", rc);
         return (-1);
     }
-    ucs_assert(sizeof(uct_utofu_am_buf) + length <= UCT_UTOFU_RINGBUF_ITEM_SIZE);
+    ucs_assert(sizeof(uct_utofu_am_buf) + length <= UCT_UTOFU_AM_RB_ITEM_SIZE);
 
     ucs_debug("uct_utofu_ep_am_bcopy vcq_id=%zu", ep->vcq_id);
     rc = utofu_armw8(ep->iface->md->vcq_hdl, ep->vcq_id, UTOFU_ARMW_OP_ADD, 1, ep->am_rb_tail_stadd, 0, UTOFU_ONESIDED_FLAG_LOCAL_MRQ_NOTICE, NULL);
@@ -140,7 +140,7 @@ ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
         return (-1);
     }
     ucs_debug("remote value=%zu", mnotice.rmt_value);
-    target_stadd = ep->am_rb_stadd + (mnotice.rmt_value % UCT_UTOFU_RINGBUF_ITEM_COUNT) * (UCT_UTOFU_RINGBUF_ITEM_SIZE);
+    target_stadd = ep->am_rb_stadd + (mnotice.rmt_value % UCT_UTOFU_AM_RB_ITEM_COUNT) * (UCT_UTOFU_AM_RB_ITEM_SIZE);
     rc = utofu_put(ep->iface->md->vcq_hdl, ep->vcq_id, buf_stadd, target_stadd,
         sizeof(uct_utofu_am_buf) + length, 0, UTOFU_ONESIDED_FLAG_TCQ_NOTICE, NULL);
     if (rc != UTOFU_SUCCESS) {
@@ -170,14 +170,8 @@ ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
     return (length);
 }
 
-ucs_status_t uct_utofu_ep_am_zcopy(uct_ep_h tl_ep, uint8_t id, const void *header,
-                                   unsigned header_length, const uct_iov_t *iov,
-                                   size_t iovcnt, unsigned flags, uct_completion_t *comp) {
-    ucs_debug("call uct_utofu_ep_am_zcopy");
-    return (UCS_ERR_NOT_IMPLEMENTED);
-}
 
-ucs_status_t uct_utofu_ep_get_short(uct_ep_h ep,
+ucs_status_t uct_utofu_ep_get_short(uct_ep_h tl_ep,
                                     void *buffer,
                                     unsigned length,
                                     uint64_t remote_addr,
@@ -186,7 +180,7 @@ ucs_status_t uct_utofu_ep_get_short(uct_ep_h ep,
     return (UCS_ERR_NOT_IMPLEMENTED);
 }
 
-ucs_status_t uct_utofu_ep_get_bcopy(uct_ep_h ep,
+ucs_status_t uct_utofu_ep_get_bcopy(uct_ep_h tl_ep,
                                     uct_unpack_callback_t unpack_cb,
                                     void *arg,
                                     size_t length,
@@ -197,12 +191,83 @@ ucs_status_t uct_utofu_ep_get_bcopy(uct_ep_h ep,
     return (UCS_ERR_NOT_IMPLEMENTED);
 }
 
-ucs_status_t uct_utofu_ep_get_zcopy(uct_ep_h ep,
+ucs_status_t uct_utofu_ep_get_zcopy(uct_ep_h tl_ep,
                                     const uct_iov_t *iov,
                                     size_t iovcnt,
                                     uint64_t remote_addr,
-                                    uct_rkey_t rkey,
+                                    uct_rkey_t tl_rkey,
                                     uct_completion_t *comp) {
-    ucs_debug("uct_utofu_ep_get_zcopy");
-    return (UCS_ERR_NOT_IMPLEMENTED);
+    uct_utofu_ep_t *ep = ucs_derived_of(tl_ep, uct_utofu_ep_t);
+    uct_utofu_get_rb_item *item;
+    int rc;
+    uct_utofu_rkey_t *rkey = (uct_utofu_rkey_t *)tl_rkey;
+    size_t tot = 0;
+    utofu_stadd_t target = rkey->stadd + (remote_addr - (uint64_t)rkey->buf);
+    ucs_debug("uct_utofu_ep_get_zcopy vcq_id=%zu iovcnt=%zu", ep->vcq_id, iovcnt);
+    item = (uct_utofu_get_rb_item *)(ep->iface->get_rb + sizeof(uct_utofu_get_rb_item) * (ep->iface->get_rb_tail % 256));
+    item->iovcnt = iovcnt;
+    for (size_t i = 0; i < iovcnt; i++) {
+        item->iov[i].length = iov[i].length;
+        rc = utofu_reg_mem(ep->iface->md->vcq_hdl, iov[i].buffer, iov[i].length, 0, &item->iov[i].stadd);
+        if (rc != UTOFU_SUCCESS) {
+            ucs_error("utofu_reg_mem error rc=%d", rc);
+            return (-1);
+        }
+        rc = utofu_get(ep->iface->md->vcq_hdl, ep->vcq_id, item->iov[i].stadd, target + tot, item->iov[i].length, 
+            ep->iface->get_rb_tail % 256, UTOFU_ONESIDED_FLAG_LOCAL_MRQ_NOTICE, NULL);
+        if (rc != UTOFU_SUCCESS) {
+            ucs_error("utofu_get error rc=%d", rc);
+            return (-1);
+        }
+    }
+    item->comp = comp;
+    item->recvcnt = 0;
+    item->errcnt = 0;
+    ep->iface->get_rb_tail++;
+    if (ep->iface->get_rb_tail - ep->iface->get_rb_head == 255) {
+        while (!uct_utofu_poll_mrq(ep->iface));
+    }
+    ucs_assert(ep->iface->get_rb_tail - ep->iface->get_rb_head < 255);
+    
+    return (UCS_INPROGRESS);
+}
+
+unsigned uct_utofu_poll_mrq(struct uct_utofu_iface *iface) {
+    int rc;
+    struct utofu_mrq_notice mnotice;
+    int tgt = -1;
+    uct_utofu_get_rb_item *item;
+    unsigned cnt = 0;
+    do {
+        rc = utofu_poll_mrq(iface->md->vcq_hdl, 0, &mnotice);
+        if (rc == UTOFU_ERR_NOT_FOUND) {
+            return (cnt);
+        }
+        for (tgt = iface->get_rb_head; tgt < iface->get_rb_tail; tgt++) {
+            if (tgt % 256 == mnotice.edata) {
+                break;
+            }
+        }
+        if (tgt < 0) {
+            ucs_error("unknown edata=%zu", mnotice.edata);
+            return (cnt);
+        }
+        item = (uct_utofu_get_rb_item *)(iface->get_rb + sizeof(uct_utofu_get_rb_item) * (tgt % 256));
+        if (rc != UTOFU_SUCCESS) {
+            item->errcnt++;
+        }
+        item->recvcnt++;
+        cnt++;
+        for (tgt = iface->get_rb_head; tgt < iface->get_rb_tail; tgt++) {
+            item = (uct_utofu_get_rb_item *)(iface->get_rb + sizeof(uct_utofu_get_rb_item) * (tgt % 256));
+            uct_completion_update_status(item->comp, item->errcnt ? UCS_ERR_IO_ERROR : UCS_OK);
+            if (item->recvcnt == item->iovcnt && --item->comp->count == 0) {
+                ucs_debug("get_zcopy completed status=%s", ucs_status_string(item->comp->status));
+                item->comp->func(item->comp);
+                iface->get_rb_head++;
+            } else {
+                break;
+            }
+        }
+    } while (1);
 }

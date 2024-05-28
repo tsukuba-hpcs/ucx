@@ -11,8 +11,10 @@
 
 #define UCT_UTOFU_MD_NAME "utofu"
 #define UCT_UTOFU_CONFIG_PREFIX "UTOFU_"
-#define UCT_UTOFU_RINGBUF_ITEM_SIZE  (1024)
-#define UCT_UTOFU_RINGBUF_ITEM_COUNT (128*1024)
+#define UCT_UTOFU_AM_RB_ITEM_SIZE  (1024)
+#define UCT_UTOFU_AM_RB_ITEM_COUNT (128*1024)
+#define UCT_UTOFU_GET_RB_ITEM_COUNT 256
+#define UCT_UTOFU_GET_IOV_MAX 64
 
 typedef struct uct_utofu_iface_config {
     uct_iface_config_t super;
@@ -36,6 +38,13 @@ struct uct_utofu_iface {
     utofu_stadd_t am_rb_tail_stadd;
     uint8_t *am_rb;
     utofu_stadd_t am_rb_stadd;
+
+    // Get
+    uint64_t get_rb_head;
+    uint64_t get_rb_tail;
+    uint8_t *get_rb;
+
+    uct_recv_desc_t release_desc;
 };
 
 typedef struct uct_utofu_iface uct_utofu_iface_t;
@@ -91,7 +100,6 @@ void uct_utofu_ep_pending_purge(uct_ep_h tl_ep, uct_pending_purge_callback_t cb,
 ucs_status_t uct_utofu_ep_flush(uct_ep_h tl_ep, unsigned flags, uct_completion_t *comp);
 
 #define UCT_UTOFU_AM_BCOPY UCS_BIT(1)
-#define UCT_UTOFU_AM_ZCOPY UCS_BIT(16)
 
 typedef struct {
     uint32_t notify;
@@ -100,14 +108,24 @@ typedef struct {
     uint8_t data[];
 } uct_utofu_am_buf;
 
+typedef struct {
+    utofu_stadd_t stadd;
+    size_t length;
+} uct_utofu_get_iov;
+
+typedef struct {
+    size_t iovcnt;
+    size_t recvcnt;
+    size_t errcnt;
+    uct_completion_t *comp;
+    uct_utofu_get_iov iov[UCT_UTOFU_GET_IOV_MAX];
+} uct_utofu_get_rb_item;
+
 ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
                               uint8_t id,
                               uct_pack_callback_t pack_cb,
                               void *arg,
                               unsigned flags);
-ucs_status_t uct_utofu_ep_am_zcopy(uct_ep_h tl_ep, uint8_t id, const void *header,
-                                   unsigned header_length, const uct_iov_t *iov,
-                                   size_t iovcnt, unsigned flags, uct_completion_t *comp);
 ucs_status_t uct_utofu_ep_get_short(uct_ep_h ep,
                                     void *buffer,
                                     unsigned length,
@@ -126,6 +144,7 @@ ucs_status_t uct_utofu_ep_get_zcopy(uct_ep_h ep,
                                     uint64_t remote_addr,
                                     uct_rkey_t rkey,
                                     uct_completion_t *comp);
+unsigned uct_utofu_poll_mrq(struct uct_utofu_iface *iface);
 
 UCS_CLASS_DECLARE(uct_utofu_ep_t, const uct_ep_params_t *);
 UCS_CLASS_DECLARE_NEW_FUNC(uct_utofu_ep_t, uct_ep_t, const uct_ep_params_t *);

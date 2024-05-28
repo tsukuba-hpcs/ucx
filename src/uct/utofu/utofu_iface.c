@@ -10,17 +10,22 @@ ucs_status_t uct_utofu_iface_query(uct_iface_h tl_iface, uct_iface_attr_t *iface
     iface_attr->max_conn_priv = 0;
 
     // Aactive Message
-	iface_attr->cap.am.max_iov          =  64;
+	iface_attr->cap.am.max_iov          =  UCT_UTOFU_GET_IOV_MAX;
 	iface_attr->cap.am.opt_zcopy_align  =  512;
 	iface_attr->cap.am.align_mtu        =  128;
     iface_attr->cap.am.max_short        =  32;
-	iface_attr->cap.am.max_bcopy        =  512;
-    iface_attr->cap.am.min_zcopy        =  0;
-    iface_attr->cap.am.max_zcopy        =  512;
+	iface_attr->cap.am.max_bcopy        =  UCT_UTOFU_AM_RB_ITEM_SIZE-sizeof(uct_utofu_am_buf);
+
+    iface_attr->cap.get.max_iov         =  UCT_UTOFU_GET_IOV_MAX;
+    iface_attr->cap.get.align_mtu       =  128;
+    iface_attr->cap.get.opt_zcopy_align =  512;
+    iface_attr->cap.get.max_short       =    0;
+    iface_attr->cap.get.max_bcopy       =  UCT_UTOFU_AM_RB_ITEM_SIZE-sizeof(uct_utofu_am_buf);
+    iface_attr->cap.get.min_zcopy       =  512;
+    iface_attr->cap.get.max_zcopy       =  1024*1024*8;
 
     iface_attr->cap.flags = 
 		UCT_IFACE_FLAG_AM_BCOPY  |
-        UCT_IFACE_FLAG_AM_ZCOPY  |
         UCT_IFACE_FLAG_GET_SHORT |
         UCT_IFACE_FLAG_GET_BCOPY |
         UCT_IFACE_FLAG_GET_ZCOPY |
@@ -34,10 +39,10 @@ ucs_status_t uct_utofu_iface_query(uct_iface_h tl_iface, uct_iface_attr_t *iface
 	iface_attr->cap.flags |= UCT_IFACE_FLAG_ATOMIC_CPU;
 
     iface_attr->overhead = 0;
-	iface_attr->latency = ucs_linear_func_make(0, 0);
+	iface_attr->latency = ucs_linear_func_make(10e-20, 10e-20);
 	iface_attr->priority = 77;
 
-	iface_attr->bandwidth.dedicated = 68 * UCS_MBYTE;
+	iface_attr->bandwidth.dedicated = 6 * 6800 * UCS_MBYTE;
 	iface_attr->bandwidth.shared = 0;
 
 	iface_attr->dev_num_paths = 1;
@@ -83,21 +88,29 @@ unsigned uct_utofu_iface_progress(uct_iface_h tl_iface) {
     unsigned count = 0;
     ucs_status_t status;
     uct_utofu_am_buf *head = (uct_utofu_am_buf *)(iface->am_rb + 
-        (UCT_UTOFU_RINGBUF_ITEM_SIZE * (iface->am_rb_head % UCT_UTOFU_RINGBUF_ITEM_COUNT)));
+        (UCT_UTOFU_AM_RB_ITEM_SIZE * (iface->am_rb_head % UCT_UTOFU_AM_RB_ITEM_COUNT)));
     ucs_debug("uct_utofu_iface_progress head=%zu tail=%zu", iface->am_rb_head, iface->am_rb_tail);
 
     while (head->notify) {
         iface->am_rb_head++;
         count++;
-        status = uct_iface_invoke_am(&iface->super, head->am_id, head->data,
-                                    head->length, UCT_CB_PARAM_FLAG_DESC);
-        if (status != UCS_OK) {
-            ucs_error("uct_iface_invoke_am failed %s", ucs_status_string(status));
+        if (head->notify & UCT_UTOFU_AM_BCOPY) {
+            ucs_debug("head->data=%p", head->data);
+            status = uct_iface_invoke_am(&iface->super, head->am_id, head->data,
+                                        head->length, 0);
+            
+            if (status != UCS_OK) {
+                ucs_error("uct_iface_invoke_am failed %s", ucs_status_string(status));
+            }
+        } else {
+            ucs_error("probably the queue overflowed");
         }
         head->notify = 0;
         head = (uct_utofu_am_buf *)(iface->am_rb + 
-            (UCT_UTOFU_RINGBUF_ITEM_SIZE * (iface->am_rb_head % UCT_UTOFU_RINGBUF_ITEM_COUNT)));
+            (UCT_UTOFU_AM_RB_ITEM_SIZE * (iface->am_rb_head % UCT_UTOFU_AM_RB_ITEM_COUNT)));
     }
+
+    count += uct_utofu_poll_mrq(iface);
     return (count);
 }
 
@@ -114,7 +127,7 @@ static uct_iface_ops_t uct_utofu_iface_ops = {
     .ep_am_short = NULL,
     .ep_am_short_iov = NULL,
     .ep_am_bcopy = uct_utofu_ep_am_bcopy,
-    .ep_am_zcopy = uct_utofu_ep_am_zcopy,
+    .ep_am_zcopy = (uct_ep_am_zcopy_func_t)ucs_empty_function_return_unsupported,
     .ep_put_short = NULL,
     .ep_put_bcopy = NULL,
     .ep_put_zcopy = NULL,
@@ -157,6 +170,10 @@ static uct_iface_internal_ops_t uct_utofu_iface_internal_ops = {
     .ep_invalidate       = (uct_ep_invalidate_func_t)ucs_empty_function_return_unsupported,
     .iface_is_reachable_v2 = (uct_iface_is_reachable_v2_func_t)ucs_empty_function,
 };
+
+void uct_utofu_iface_release_desc(uct_recv_desc_t *self, void *desc)
+{
+}
 
 static UCS_CLASS_INIT_FUNC(uct_utofu_iface_t,
 						   uct_md_h tl_md,
@@ -202,10 +219,10 @@ static UCS_CLASS_INIT_FUNC(uct_utofu_iface_t,
         return UCS_ERR_NO_RESOURCE;
     }
     self->am_rb = ucs_malloc(
-        UCT_UTOFU_RINGBUF_ITEM_SIZE * UCT_UTOFU_RINGBUF_ITEM_COUNT,
+        UCT_UTOFU_AM_RB_ITEM_SIZE * UCT_UTOFU_AM_RB_ITEM_COUNT,
         "am_rb");
     rc = utofu_reg_mem(md->vcq_hdl, self->am_rb,
-        UCT_UTOFU_RINGBUF_ITEM_SIZE * UCT_UTOFU_RINGBUF_ITEM_COUNT,
+        UCT_UTOFU_AM_RB_ITEM_SIZE * UCT_UTOFU_AM_RB_ITEM_COUNT,
         0, &self->am_rb_stadd);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_reg_mem failed with %d", rc);
@@ -215,7 +232,13 @@ static UCS_CLASS_INIT_FUNC(uct_utofu_iface_t,
         ucs_error("ucs_mpool_init failed with %s", ucs_status_string(status));
         return (status);
     }
+    self->get_rb_head = 0;
+    self->get_rb_tail = 0;
+    self->get_rb = ucs_malloc(
+        sizeof(uct_utofu_get_rb_item) * UCT_UTOFU_GET_RB_ITEM_COUNT,
+        "get_rb");
 
+    self->release_desc.cb = uct_utofu_iface_release_desc;
     return (UCS_OK);
 }
 
@@ -232,6 +255,7 @@ static UCS_CLASS_CLEANUP_FUNC(uct_utofu_iface_t)
         ucs_error("utofu_reg_mem failed with %d", rc);
     }
     ucs_free(self->am_rb);
+    ucs_free(self->get_rb);
     return;
 }
 

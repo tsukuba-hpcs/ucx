@@ -111,6 +111,12 @@ ucs_status_t uct_utofu_rkey_unpack(uct_component_t *component,
     return (UCS_OK);
 }
 
+ucs_status_t uct_utofu_rkey_release(uct_component_t *component, uct_rkey_t tl_rkey, void *handle) {
+    uct_utofu_rkey_t *rkey = (uct_utofu_rkey_t *)tl_rkey;
+    free(rkey);
+    return (UCS_OK);
+}
+
 uct_md_ops_t md_ops = {
     .close = uct_utofu_md_close,
     .query = uct_utofu_md_query,
@@ -171,7 +177,7 @@ uct_component_t uct_utofu_component = {
     .cm_open = ucs_empty_function_return_unsupported,
     .rkey_unpack = uct_utofu_rkey_unpack,
     .rkey_ptr = NULL,
-    .rkey_release = NULL,
+    .rkey_release = uct_utofu_rkey_release,
     .name = UCT_UTOFU_MD_NAME,
     .md_config = {
         .name = "UTOFU memory domain",
