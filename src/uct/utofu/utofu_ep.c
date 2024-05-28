@@ -114,11 +114,11 @@ ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
     buf->am_id = id;
     length = pack_cb(&buf->data, arg);
     buf->length = length;
-    ucs_debug("packed length=%u", length);
     rc = utofu_reg_mem(ep->iface->md->vcq_hdl, buf, sizeof(uct_utofu_am_buf) + length, 0, &buf_stadd);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_reg_mem error rc=%d", rc);
-        return (-1);
+        length = -1;
+        goto am_bcopy_put_buf;
     }
     ucs_assert(sizeof(uct_utofu_am_buf) + length <= UCT_UTOFU_AM_RB_ITEM_SIZE);
 
@@ -126,47 +126,55 @@ ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
     rc = utofu_armw8(ep->iface->md->imm_vcq_hdl, ep->vcq_id, UTOFU_ARMW_OP_ADD, 1, ep->am_rb_tail_stadd, 0, UTOFU_ONESIDED_FLAG_LOCAL_MRQ_NOTICE, NULL);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_armw4 error rc=%d", rc);
-        return (-1);
+        length = -1;
+        goto am_bcopy_dereg_buf;
     }
     do {
         rc = utofu_poll_mrq(ep->iface->md->imm_vcq_hdl, 0, &mnotice);
     } while (rc == UTOFU_ERR_NOT_FOUND);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_poll_mrq error rc=%d", rc);
-        return (-1);
+        length = -1;
+        goto am_bcopy_dereg_buf;
     }
-    if (mnotice.notice_type != UTOFU_MRQ_TYPE_LCL_ARMW) {
-        ucs_error("notice.notice_type != UTOFU_MRQ_TYPE_LCL_ARMW");
-        return (-1);
-    }
-    ucs_debug("remote value=%zu", mnotice.rmt_value);
     target_stadd = ep->am_rb_stadd + (mnotice.rmt_value % UCT_UTOFU_AM_RB_ITEM_COUNT) * (UCT_UTOFU_AM_RB_ITEM_SIZE);
     rc = utofu_put(ep->iface->md->vcq_hdl, ep->vcq_id, buf_stadd, target_stadd,
         sizeof(uct_utofu_am_buf) + length, 0, UTOFU_ONESIDED_FLAG_TCQ_NOTICE, NULL);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_put error %d", rc);
-        return (-1);
+        length = -1;
+        goto am_bcopy_dereg_buf;
     }
     rc = utofu_armw4(ep->iface->md->vcq_hdl, ep->vcq_id, UTOFU_ARMW_OP_ADD,
         UCT_UTOFU_AM_BCOPY, target_stadd, 0, UTOFU_ONESIDED_FLAG_TCQ_NOTICE, NULL);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_put error %d", rc);
-        return (-1);
+        length = -1;
+        goto am_bcopy_poll_again;
     }
     do {
         rc = utofu_poll_tcq(ep->iface->md->vcq_hdl, 0, &cbdata);
     } while (rc == UTOFU_ERR_NOT_FOUND);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_poll_tcq error rc=%d", rc);
+        length = -1;
     }
+am_bcopy_poll_again:
     do {
         rc = utofu_poll_tcq(ep->iface->md->vcq_hdl, 0, &cbdata);
     } while (rc == UTOFU_ERR_NOT_FOUND);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("utofu_poll_tcq error rc=%d", rc);
+        length = -1;
+    }
+am_bcopy_dereg_buf:
+    rc = utofu_dereg_mem(ep->iface->md->vcq_hdl, buf_stadd, 0);
+    if (rc != UTOFU_SUCCESS) {
+        ucs_error("utofu_dereg_mem rc=%d", rc);
+        length = -1;
+    }
+am_bcopy_put_buf:
     ucs_mpool_put(buf);
-    if (rc != UTOFU_SUCCESS) {
-        ucs_error("utofu_poll_tcq error rc=%d", rc);
-        return (-1);
-    }
     return (length);
 }
 
@@ -206,23 +214,27 @@ ucs_status_t uct_utofu_ep_get_zcopy(uct_ep_h tl_ep,
     ucs_debug("uct_utofu_ep_get_zcopy vcq_id=%zu iovcnt=%zu", ep->vcq_id, iovcnt);
     item = (uct_utofu_get_rb_item *)(ep->iface->get_rb + sizeof(uct_utofu_get_rb_item) * (ep->iface->get_rb_tail % 256));
     item->iovcnt = iovcnt;
+    item->errcnt = 0;
+    item->recvcnt = 0;
     for (size_t i = 0; i < iovcnt; i++) {
         item->iov[i].length = iov[i].length;
         rc = utofu_reg_mem(ep->iface->md->vcq_hdl, iov[i].buffer, iov[i].length, 0, &item->iov[i].stadd);
         if (rc != UTOFU_SUCCESS) {
             ucs_error("utofu_reg_mem error rc=%d", rc);
-            return (-1);
+            item->iov[i].stadd = 0;
+            item->errcnt++;
+            item->recvcnt++;
+            continue;
         }
         rc = utofu_get(ep->iface->md->vcq_hdl, ep->vcq_id, item->iov[i].stadd, target + tot, item->iov[i].length, 
             ep->iface->get_rb_tail % 256, UTOFU_ONESIDED_FLAG_LOCAL_MRQ_NOTICE, NULL);
         if (rc != UTOFU_SUCCESS) {
             ucs_error("utofu_get error rc=%d", rc);
-            return (-1);
+            item->errcnt++;
+            item->recvcnt++;
         }
     }
     item->comp = comp;
-    item->recvcnt = 0;
-    item->errcnt = 0;
     ep->iface->get_rb_tail++;
     if (ep->iface->get_rb_tail - ep->iface->get_rb_head == 255) {
         while (!uct_utofu_poll_mrq(ep->iface));
@@ -264,6 +276,14 @@ unsigned uct_utofu_poll_mrq(struct uct_utofu_iface *iface) {
             if (item->recvcnt == item->iovcnt && --item->comp->count == 0) {
                 ucs_debug("get_zcopy completed status=%s", ucs_status_string(item->comp->status));
                 item->comp->func(item->comp);
+                for (size_t i = 0; i < item->iovcnt; i++) {
+                    if (item->iov[i].stadd != 0) {
+                        rc = utofu_dereg_mem(iface->md->vcq_hdl, item->iov[i].stadd, 0);
+                        if (rc != UTOFU_SUCCESS) {
+                            ucs_error("utofu_dereg_mem rc=%d", rc);
+                        }
+                    }
+                }
                 iface->get_rb_head++;
             } else {
                 break;
