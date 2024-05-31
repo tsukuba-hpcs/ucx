@@ -144,41 +144,55 @@ ucs_status_t uct_utofu_md_open(uct_component_h component,
     utofu_tni_id_t *tni_ids;
     size_t num_tnis;
     uint32_t cpu_id, numa_id;
+    int try = 0;
+    md = ucs_malloc(sizeof(*md), "uct_utofu_md_t");
+    ucs_assert(md != NULL);
+    md->super.ops = &md_ops;
+    md->super.component = &uct_utofu_component;
     rc = utofu_get_onesided_tnis(&tni_ids, &num_tnis);
     if (rc != UTOFU_SUCCESS) {
 		ucs_error("error on utofu_get_onesided_tnis rc=%d", rc);
-		return UCS_ERR_UNSUPPORTED;
+		goto md_open_err;
     }
     syscall(SYS_getcpu, &cpu_id, &numa_id, NULL, NULL);
-    md = ucs_malloc(sizeof(*md), "uct_utofu_md_t");
-    md->super.ops = &md_ops;
-    md->super.component = &uct_utofu_component;
+again:
+    try++;
     md->tni_id = tni_ids[(cpu_id + (md_num++)) % num_tnis];
-    free(tni_ids);
     rc = utofu_create_vcq(md->tni_id, 0, &md->vcq_hdl);
     if (rc != UTOFU_SUCCESS) {
-		ucs_error("error on utofu_create_vcq rc=%d", rc);
-        ucs_free(md);
-		return UCS_ERR_UNSUPPORTED;
+		ucs_error("L%d error on utofu_create_vcq rc=%d tni_id=%d", __LINE__, rc, md->tni_id);
+        if (try > num_tnis) {
+            goto md_open_err;
+        }
+        goto again;
     }
     rc = utofu_query_vcq_id(md->vcq_hdl, &md->vcq_id);
     if (rc != UTOFU_SUCCESS) {
-		ucs_error("error on utofu_query_vcq_id rc=%d", rc);
+		ucs_error("error on utofu_query_vcq_id rc=%d tni_id=%d", rc, md->tni_id);
         utofu_free_vcq(md->vcq_hdl);
-        ucs_free(md);
-        return UCS_ERR_UNSUPPORTED;
+        if (try > num_tnis) {
+            goto md_open_err;
+        }
+        goto again;
     }
     rc = utofu_create_vcq(md->tni_id, 0, &md->imm_vcq_hdl);
     if (rc != UTOFU_SUCCESS) {
-		ucs_error("error on utofu_create_vcq rc=%d", rc);
-        ucs_free(md);
-		return UCS_ERR_UNSUPPORTED;
+		ucs_error("L%d error on utofu_create_vcq rc=%d tni_id=%d", __LINE__, rc, md->tni_id);
+        utofu_free_vcq(md->vcq_hdl);
+        if (try > num_tnis) {
+            goto md_open_err;
+        }
+        goto again;
     }
     //uct_utofu_md_config_t *config = NULL;
     //config = ucs_derived_of(md_config, uct_utofu_md_config_t); 
     *md_p = &md->super;
     ucs_debug("uct_utofu_md_open uct_md_h=%p tni_id=%d vcq_id=%zu\n", *md_p, md->tni_id, md->vcq_id); 
+    free(tni_ids);
     return (status);
+md_open_err:
+    ucs_free(md);
+    return UCS_ERR_UNSUPPORTED;
 }
 
 uct_component_t uct_utofu_component = {
