@@ -122,9 +122,9 @@ ssize_t uct_utofu_ep_am_bcopy(uct_ep_h tl_ep,
     }
     ucs_assert(sizeof(uct_utofu_am_buf) + length <= UCT_UTOFU_AM_RB_ITEM_SIZE);
 
-    ucs_debug("uct_utofu_ep_am_bcopy vcq_id=%zu", ep->vcq_id);
 again_armw8:
-    rc = utofu_armw8(ep->iface->md->imm_vcq_hdl, ep->vcq_id, UTOFU_ARMW_OP_ADD, 1, ep->am_rb_tail_stadd, 0, UTOFU_ONESIDED_FLAG_LOCAL_MRQ_NOTICE, NULL);
+    rc = utofu_armw8(ep->iface->md->imm_vcq_hdl, ep->vcq_id, UTOFU_ARMW_OP_ADD, 1,
+        ep->am_rb_tail_stadd, 0, UTOFU_ONESIDED_FLAG_LOCAL_MRQ_NOTICE | UTOFU_ONESIDED_FLAG_CACHE_INJECTION, NULL);
     if (rc != UTOFU_SUCCESS) {
         if (rc == UTOFU_ERR_BUSY) {
             utofu_poll_tcq(ep->iface->md->imm_vcq_hdl, 0, &cbdata);
@@ -142,16 +142,17 @@ again_armw8:
         length = -1;
         goto am_bcopy_dereg_buf;
     }
+    ucs_debug("uct_utofu_ep_am_bcopy vcq_id=%zu target=%zu", ep->vcq_id, mnotice.rmt_value);
     target_stadd = ep->am_rb_stadd + (mnotice.rmt_value % UCT_UTOFU_AM_RB_ITEM_COUNT) * (UCT_UTOFU_AM_RB_ITEM_SIZE);
     rc = utofu_put(ep->iface->md->vcq_hdl, ep->vcq_id, buf_stadd, target_stadd,
-        sizeof(uct_utofu_am_buf) + length, 0, UTOFU_ONESIDED_FLAG_TCQ_NOTICE, NULL);
+        sizeof(uct_utofu_am_buf) + length, 0, UTOFU_ONESIDED_FLAG_TCQ_NOTICE | UTOFU_ONESIDED_FLAG_STRONG_ORDER, NULL);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_put error %d", rc);
         length = -1;
         goto am_bcopy_dereg_buf;
     }
     rc = utofu_armw4(ep->iface->md->vcq_hdl, ep->vcq_id, UTOFU_ARMW_OP_ADD,
-        UCT_UTOFU_AM_BCOPY, target_stadd, 0, UTOFU_ONESIDED_FLAG_TCQ_NOTICE, NULL);
+        UCT_UTOFU_AM_BCOPY, target_stadd, 0, UTOFU_ONESIDED_FLAG_TCQ_NOTICE | UTOFU_ONESIDED_FLAG_STRONG_ORDER | UTOFU_ONESIDED_FLAG_CACHE_INJECTION, NULL);
     if (rc != UTOFU_SUCCESS) {
         ucs_error("utofu_armw4 error %d", rc);
         length = -1;

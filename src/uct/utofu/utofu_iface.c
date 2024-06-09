@@ -89,10 +89,10 @@ unsigned uct_utofu_iface_progress(uct_iface_h tl_iface) {
     ucs_status_t status;
     uct_utofu_am_buf *head = (uct_utofu_am_buf *)(iface->am_rb + 
         (UCT_UTOFU_AM_RB_ITEM_SIZE * (iface->am_rb_head % UCT_UTOFU_AM_RB_ITEM_COUNT)));
-    ucs_debug("uct_utofu_iface_progress head=%zu tail=%zu", iface->am_rb_head, iface->am_rb_tail);
 
     while (head->notify) {
         iface->am_rb_head++;
+        ucs_debug("uct_utofu_iface_progress head=%zu tail=%zu", iface->am_rb_head, iface->am_rb_tail);
         count++;
         if (head->notify & UCT_UTOFU_AM_BCOPY) {
             ucs_debug("head->data=%p", head->data);
@@ -173,6 +173,7 @@ static uct_iface_internal_ops_t uct_utofu_iface_internal_ops = {
 
 void uct_utofu_iface_release_desc(uct_recv_desc_t *self, void *desc)
 {
+    ucs_debug("uct_utofu_iface_release_desc");
 }
 
 static UCS_CLASS_INIT_FUNC(uct_utofu_iface_t,
